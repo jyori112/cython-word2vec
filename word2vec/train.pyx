@@ -9,7 +9,7 @@ from multiprocessing.pool import Pool
 from multiprocessing import RawArray, RawValue, Value
 from libc.string cimport memset
 import traceback
-from .data cimport Word, Vocab, Corpus
+from .data cimport Word, Vocab, Corpus, Embedding
 import logging, sys, os
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ def train_line(list line):
             end = min(len(line), center_pos + _window + 1)
             center = line[center_pos]
             contexts = line[start:end]
+
             _train(center, contexts)
     except:
         print(traceback.format_exc())
@@ -58,11 +59,10 @@ def train_line(list line):
         p = 1.0 - float(_line_counter.value) / _corpus.n_lines
         _alpha.value = max(0.0001, p * 0.025)
     
-
-
 cdef inline void _train(Word trg, list ctxs):
     cdef np.float32_t f, g, label
-    cdef int trg_index, trg_row, ctx_row
+    cdef int trg_index, trg_row, ctx_row, best_row, row, tran_idx
+    cdef np.float32_t best_score, nrm, dot, trg_nrm
     cdef Word negative_sample
 
     cdef np.float32_t *trg_ = <np.float32_t *>(np.PyArray_DATA(_trg))
@@ -120,23 +120,26 @@ cdef inline void _train(Word trg, list ctxs):
         print(traceback.format_exc())
         raise
 
-def train(vocab, corpus, wordsim, dim=100):
-    global _trg, _ctx, _vocab, _corpus, _dim, _window, _negative, _alpha
+def train(vocab, corpus, wordsim, dim=100, window=5, negative=5):
+    global _vocab, _corpus
+    global _trg, _ctx
+    global _dim, _window, _negative, _alpha
     global _context_vector, _work
     global _alpha, _line_counter
+
     logger.info('--- Training')
 
-    _dim = dim
-    _window = 5
-    _negative = 5
     _vocab = vocab
     _corpus = corpus
+
+    _dim = dim
+    _window = window
+    _negative = negative
     _line_counter = Value(c_uint64, 0)
     _alpha = RawValue(c_float, 0.025)
 
     _context_vector = np.zeros(shape=(dim, ), dtype=np.float32)
     _work = np.zeros(shape=(dim, ), dtype=np.float32)
-
 
     logger.info('Initialize embeddings')
     trg_shared = RawArray(c_float, len(vocab) * dim)
@@ -155,10 +158,11 @@ def train(vocab, corpus, wordsim, dim=100):
     with Pool(15, initializer=init_work, initargs=(trg_shared, ctx_shared)) as p:
         for i, _ in enumerate(p.imap_unordered(train_line, corpus, chunksize=30)):
             if i % 100000 == 0:
-                logger.info('prog={:.2f}%; spearman={:.3f}; alpha={:.3f}'.format(
-                    i/corpus.n_lines*100, evaluate(wordsim), _alpha.value))
+                spearson, coverage = evaluate(wordsim)
+                logger.info('prog={:.2f}%; spearman={:.3f}; coverage={:.3f}; alpha={:.3f}'.format(
+                    i/corpus.n_lines*100, spearson, coverage, _alpha.value))
 
-    return _trg, _ctx
+    return Embedding(_vocab, _trg, _ctx)
 
 def init_work(trg_shared, ctx_shared):
     global _trg, _ctx
@@ -172,8 +176,12 @@ def init_work(trg_shared, ctx_shared):
 def evaluate(wordsim):
     model = []
     gold = []
+    oov = 0
 
     for word1, word2, sim in wordsim:
+        if word1.is_UNK or word2.is_UNK:
+            oov += 1
+
         emb1 = _trg[word1.index]
         emb2 = _trg[word2.index]
 
@@ -181,4 +189,4 @@ def evaluate(wordsim):
         model.append(score)
         gold.append(sim)
 
-    return scipy.stats.spearmanr(model, gold)[0]
+    return scipy.stats.spearmanr(model, gold)[0], len(model) / (len(model) + oov)
