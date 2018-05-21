@@ -120,7 +120,7 @@ cdef inline void _train(Word trg, list ctxs):
         print(traceback.format_exc())
         raise
 
-def train(vocab, corpus, wordsim, dim=100, window=5, negative=5):
+def train(vocab, corpus, wordsim=None, dim=100, window=5, negative=5):
     global _vocab, _corpus
     global _trg, _ctx
     global _dim, _window, _negative, _alpha
@@ -158,9 +158,12 @@ def train(vocab, corpus, wordsim, dim=100, window=5, negative=5):
     with Pool(15, initializer=init_work, initargs=(trg_shared, ctx_shared)) as p:
         for i, _ in enumerate(p.imap_unordered(train_line, corpus, chunksize=30)):
             if i % 100000 == 0:
-                spearson, coverage = evaluate(wordsim)
-                logger.info('prog={:.2f}%; spearman={:.3f}; coverage={:.3f}; alpha={:.3f}'.format(
-                    i/corpus.n_lines*100, spearson, coverage, _alpha.value))
+                if wordsim:
+                    spearson, coverage = evaluate(wordsim)
+                    logger.info('prog={:.2f}%; spearman={:.3f}; coverage={:.3f}; alpha={:.3f}'.format(
+                        i/corpus.n_lines*100, spearson, coverage, _alpha.value))
+                else:
+                    logger.info('prg={:.2f}%; alpha={:.3f}'.format(i/corpus.n_lines * 100, _alpha.value))
 
     return Embedding(_vocab, _trg, _ctx)
 

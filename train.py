@@ -24,7 +24,6 @@ def main():
 
     args = parser.parse_args()
 
-
     logger.info('Load vocab')
     vocab = data.Vocab.load(args.vocab)
 
