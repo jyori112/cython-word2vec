@@ -22,7 +22,8 @@ cdef class Word:
         return "<Word {} />".format(self.text)
 
 cdef class Dictionary:
-    def __init__(self, list word_list):
+    def __init__(self, int n_lines, list word_list):
+        self.n_lines = n_lines
         self._index2word = {word.index: word for word in word_list}
         self._text2word = {word.text: word for word in word_list}
 
@@ -79,10 +80,12 @@ cdef class Dictionary:
     @staticmethod
     def build(path):
         word_count = Counter()
+        n_lines = 0
         with open(path) as f:
             for line in f:
                 tokens = line.split()
                 word_count.update(tokens)
+                n_lines += 1
 
         word_list = [(text, count) for text, count in word_count.items() if count >= 5]
         word_list = sorted(word_list, key=lambda x: x[1], reverse=True)
@@ -90,16 +93,16 @@ cdef class Dictionary:
 
         word_list.append(Word(len(word_list), '__UNK__', 0))
 
-        return Dictionary(word_list)
+        return Dictionary(n_lines, word_list)
 
     def save(self, path):
         word_list = list(self._index2word.values())
-        joblib.dump(word_list, path)
+        joblib.dump(dict(word_list=word_list, n_lines=self.n_lines), path)
 
     @staticmethod
     def load(path):
-        word_list = joblib.load(path)
-        return Dictionary(word_list)
+        loader = joblib.load(path)
+        return Dictionary(loader['n_lines'], loader['word_list'])
 
 cdef class Corpus:
     def __init__(self, Dictionary dic, str path, int n_epoch):
@@ -111,6 +114,9 @@ cdef class Corpus:
 
     def progress(self):
         return self.processed_words / self.n_words
+
+    def __len__(self):
+        return self.dic.n_lines * self.n_epoch
 
     def __iter__(self):
         cdef str line

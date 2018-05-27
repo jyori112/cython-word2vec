@@ -8,6 +8,7 @@ cdef class Word:
 cdef class Dictionary:
     cdef dict _index2word
     cdef dict _text2word
+    cdef int n_lines
 
     cpdef Word text2word(self, str text)
     cpdef Word index2word(self, int index)

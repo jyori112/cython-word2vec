@@ -39,7 +39,7 @@ cdef class Parameters:
 
 # Global Variables
 cdef Dictionary _dic
-cdef int _total_word_count
+cdef int _n_line
 cdef Corpus _corpus
 cdef float32_t [:, :] _trg
 cdef float32_t [:, :] _ctx
@@ -47,17 +47,16 @@ cdef int32_t [:] _neg_table
 cdef float32_t [:] _exp_table
 cdef Parameters _param
 cdef object _alpha
-cdef object _word_counter
+cdef object _line_counter
 cdef float32_t [:] _work
 
 def train(Dictionary dic, Corpus corpus, **kwargs):
     param = Parameters(kwargs)
 
     dic = dic
-    total_word_count = dic.total_word_count()
+    n_line = len(corpus)
 
-
-    word_counter = Value(c_uint64, 0)
+    line_counter = Value(c_uint64, 0)
     alpha = RawValue(c_float, param.init_alpha)
 
     logger.info("Building Negative Sampling Table")
@@ -82,34 +81,34 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
     logger.info('Start training')
     init_args = (
         dic,
-        dic.total_word_count(),
+        n_line,
         trg_shared, ctx_shared,
         neg_table,
         exp_table,
         param,
         alpha,
-        word_counter,
+        line_counter,
     )
     with Pool(cpu_count(), initializer=init_work, initargs=init_args) as p:
         processed_tokens = 0
-        with tqdm(total=total_word_count, mininterval=0.5) as bar:
+        with tqdm(total=n_line, mininterval=0.5) as bar:
             for i, n_tokens in enumerate(p.imap_unordered(train_line, corpus, chunksize=30)):
-                bar.update(n_tokens)
+                bar.update(1)
 
     return Embedding(dic, trg, ctx)
 
-def init_work(dic, total_word_count, trg_shared, ctx_shared, neg_table, exp_table, param, alpha, word_counter):
-    global _dic, _total_word_count, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _word_counter, _work, _dim
+def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, alpha, line_counter):
+    global _dic, _n_line, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _line_counter, _work, _dim
 
     _dic = dic
-    _total_word_count = total_word_count
+    _n_line = n_line
 
     _neg_table = neg_table
     _exp_table = exp_table
 
     _param = param
     _alpha = alpha
-    _word_counter = word_counter
+    _line_counter = line_counter
 
     _trg = np.frombuffer(trg_shared, dtype=np.float32).reshape(len(dic), _param.dim)
     _ctx = np.frombuffer(ctx_shared, dtype=np.float32).reshape(len(dic), _param.dim)
@@ -135,9 +134,9 @@ def train_line(list line):
 
     return len(line)
 
-    with _word_counter.get_lock():
-        _word_counter.value += len(line)
-        p = 1.0 - float(_word_counter.value) / _total_word_count
+    with _line_counter.get_lock():
+        _line_counter.value += 1
+        p = 1.0 - float(_line_counter.value) / _n_line
         _alpha.value = max(_param.min_alpha, p * _param.init_alpha)
     
 cdef inline void _train(Word trg, Word ctx):
