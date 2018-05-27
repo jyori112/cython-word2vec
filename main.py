@@ -1,11 +1,11 @@
 #! /usr/bin/python
 
-from word2vec import Dictionary, Corpus, train
+from word2vec import Dictionary, Corpus, train as train_emb
 import joblib
 import logging, sys
 import click
 
-loggr = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 @click.group()
 def cli():
@@ -26,7 +26,7 @@ def build_dic(corpus, output):
 @click.argument('corpus', type=click.Path(exists=True))
 @click.argument('dictionary', type=click.Path(exists=True))
 @click.argument('output', type=click.Path())
-def main(corpus, dictionary, output):
+def train(corpus, dictionary, output):
     logger.info('Load dictionary')
     dic = Dictionary.load(dictionary)
 
@@ -34,7 +34,7 @@ def main(corpus, dictionary, output):
     corpus = Corpus(dic, corpus, 5)
 
     logger.info('Start training')
-    emb = train(dic, corpus, dim=100, init_alpha=0.025, min_alpha=0.0001, window=5, negative=5, neg_power=3/4)
+    emb = train_emb(dic, corpus, dim=100, init_alpha=0.025, min_alpha=0.0001, window=5, negative=5, neg_power=3/4)
 
     logger.info('Save')
 

@@ -17,10 +17,6 @@ from tqdm import tqdm, tqdm_notebook
 ctypedef np.float32_t float32_t
 
 logger = logging.getLogger(__name__)
-logger.setLevel(10)
-ch = logging.StreamHandler(sys.stdout)
-ch.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s"))
-logger.addHandler(ch)
 
 DEF MAX_EXP = 6
 DEF EXP_TABLE_SIZE = 1000
@@ -96,7 +92,7 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
     )
     with Pool(cpu_count(), initializer=init_work, initargs=init_args) as p:
         processed_tokens = 0
-        with tqdm(total=total_word_count) as bar:
+        with tqdm(total=total_word_count, mininterval=0.5) as bar:
             for i, n_tokens in enumerate(p.imap_unordered(train_line, corpus, chunksize=30)):
                 bar.update(n_tokens)
 
