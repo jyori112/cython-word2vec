@@ -7,5 +7,6 @@ setup(
     cmdclass = {'build_ext': build_ext},
     ext_modules = [
         Extension("word2vec.data", ["word2vec/data.pyx"], include_dirs=[np.get_include()]),
-        Extension("word2vec.train", ["word2vec/train.pyx"], include_dirs=[np.get_include()])]
+        Extension("word2vec.train", ["word2vec/train.pyx"], include_dirs=[np.get_include()])
+    ]
 )
