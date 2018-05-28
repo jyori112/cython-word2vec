@@ -38,8 +38,8 @@ def train(corpus, dictionary, output):
 
     logger.info('Save')
 
-    emb.save(args.output)
-    emb.save_text(args.output + '.w2v')
+    emb.save(output)
+    emb.save_text(output + '.w2v')
 
 if __name__ == '__main__':
     cli()
