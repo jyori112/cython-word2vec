@@ -11,6 +11,7 @@ from multiprocessing import RawArray, RawValue, Value, cpu_count
 from libc.string cimport memset
 import traceback
 from .data cimport Word, Dictionary, Corpus, Embedding
+#from .random cimport seed, randint_c
 import logging, sys, os
 from tqdm import tqdm, tqdm_notebook
 
@@ -114,6 +115,8 @@ def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, 
     _ctx = np.frombuffer(ctx_shared, dtype=np.float32).reshape(len(dic), _param.dim)
     _work = np.zeros(_param.dim, dtype=np.float32)
 
+    #seed(np.random.randint(2 ** 31))
+
 def train_line(list line):
     """
         line: sequence of Words
@@ -122,25 +125,32 @@ def train_line(list line):
     cdef Word center
     cdef Word context
     cdef float p
+
+    cdef int n = len(line)
     
-    for center_pos in range(len(line)):
+    for center_pos in range(n):
         start = max(0, center_pos - _param.window)
-        end = min(len(line), center_pos + _param.window + 1)
+        end = min(n, center_pos + _param.window + 1)
         for context_pos in range(start, end):
             center = line[center_pos]
             context = line[context_pos]
             if center.index != context.index:
-                _train(center, context)
+                _train(center, context, _alpha.value)
 
-    return len(line)
+    return n
 
     with _line_counter.get_lock():
         _line_counter.value += 1
         p = 1.0 - float(_line_counter.value) / _n_line
         _alpha.value = max(_param.min_alpha, p * _param.init_alpha)
     
-cdef inline void _train(Word trg, Word ctx):
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+@cython.cdivision(True)
+cdef inline void _train(Word trg, Word ctx, float32_t alpha):
     cdef float32_t label, f, g, f_dot
+    cdef int32_t ctx_index, neg_index
     cdef int one = 1
     cdef float32_t onef = <float32_t>1.0
     cdef int dim = _param.dim
@@ -155,6 +165,7 @@ cdef inline void _train(Word trg, Word ctx):
         else:
             # Negative Sample
             neg_index = np.random.randint(0, NEG_TABLE_SIZE)
+            #neg_index = randint_c() % NEG_TABLE_SIZE
             ctx_index = _neg_table[neg_index]
             label = 0.0
 
@@ -165,7 +176,7 @@ cdef inline void _train(Word trg, Word ctx):
             continue
 
         f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
-        g = (label - f) * _alpha.value
+        g = (label - f) * alpha
 
         blas.saxpy(&dim, &g, &_ctx[ctx_index, 0], &one, &_work[0], &one)
         blas.saxpy(&dim, &g, &_trg[trg.index, 0], &one, &_ctx[ctx_index, 0], &one)
