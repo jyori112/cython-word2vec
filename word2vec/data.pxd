@@ -21,7 +21,6 @@ cdef class Corpus:
     cdef public Dictionary dic
     cdef public str path
     cdef public int n_epoch, epoch
-    cdef public int n_words, processed_words
 
 cdef class Embedding:
     cdef public np.ndarray trg

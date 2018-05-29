@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/env python3
 
 from word2vec import Dictionary, Corpus, train as train_emb
 import joblib
@@ -26,15 +26,20 @@ def build_dic(corpus, output):
 @click.argument('corpus', type=click.Path(exists=True))
 @click.argument('dictionary', type=click.Path(exists=True))
 @click.argument('output', type=click.Path())
-def train(corpus, dictionary, output):
+@click.option('--iteration', type=int, default=5)
+@click.option('--dim', type=int, default=100)
+@click.option('--window', type=int, default=5)
+@click.option('--negative', type=int, default=10)
+@click.option('--init_alpha', type=float, default=0.025)
+@click.option('--min_alpha', type=float, default=0.0001)
+@click.option('--neg-power', type=float, default=3/4)
+def train(corpus, dictionary, output, iteration, **kwargs):
     logger.info('Load dictionary')
     dic = Dictionary.load(dictionary)
 
-    logger.info('Load corpus')
-    corpus = Corpus(dic, corpus, 5)
+    corpus = Corpus(dic, corpus, iteration)
 
-    logger.info('Start training')
-    emb = train_emb(dic, corpus, dim=100, init_alpha=0.025, min_alpha=0.0001, window=5, negative=5, neg_power=3/4)
+    emb = train_emb(dic, corpus, **kwargs)
 
     logger.info('Save')
 

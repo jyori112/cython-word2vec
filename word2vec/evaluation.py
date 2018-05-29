@@ -14,12 +14,9 @@ class WordSim:
         word1_emb = emb.trg_nrm[word1_index]
         word2_emb = emb.trg_nrm[word2_index]
 
-        model_score = np.sum(word1_emb * word1_emb, axis=1)
+        model_score = np.einsum('ij,ij->i', word1_emb, word2_emb)
 
-        if r == 'spearman':
-            return spearmanr(model_score, self.scores)[0]
-        elif r == 'pearson':
-            return pearsonr(model_score, self.scores)[0]
+        return spearmanr(model_score, self.scores)[0]
 
     @staticmethod
     def load(dic, path, sep=' ', lower=True):

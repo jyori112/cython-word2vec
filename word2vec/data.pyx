@@ -109,17 +109,14 @@ cdef class Corpus:
         self.dic = dic
         self.path = path
         self.n_epoch = n_epoch
-        self.n_words = dic.total_word_count() * n_epoch
-        self.processed_words = 0
-
-    def progress(self):
-        return self.processed_words / self.n_words
 
     def __len__(self):
         return self.dic.n_lines * self.n_epoch
 
     def __iter__(self):
         cdef str line
+        cdef list tokens
+
         with open(self.path) as f:
             for self.epoch in range(self.n_epoch):
                 # Reset epoch
@@ -130,7 +127,17 @@ cdef class Corpus:
                     tokens = self.dic.encode(line.split())
                     yield tokens
 
-                    self.processed_words += len(tokens)
+    def indexes(self):
+        cdef str line
+        cdef list tokens
+
+        with open(self.path) as f:
+            for self.epoch in xrange(self.n_epoch):
+                f.seek(0)
+
+                for line in f:
+                    tokens = self.dic.encode(line.split())
+                    yield [w.index for w in tokens]
 
 cdef class Embedding:
     def __init__(self, Dictionary dic, np.ndarray trg, np.ndarray ctx):

@@ -11,7 +11,7 @@ from multiprocessing import RawArray, RawValue, Value, cpu_count
 from libc.string cimport memset
 import traceback
 from .data cimport Word, Dictionary, Corpus, Embedding
-#from .random cimport seed, randint_c
+from .random cimport seed, randint_c
 import logging, sys, os
 from tqdm import tqdm, tqdm_notebook
 
@@ -40,7 +40,7 @@ cdef class Parameters:
 
 # Global Variables
 cdef Dictionary _dic
-cdef int _n_line
+cdef float  _n_line
 cdef Corpus _corpus
 cdef float32_t [:, :] _trg
 cdef float32_t [:, :] _ctx
@@ -48,7 +48,6 @@ cdef int32_t [:] _neg_table
 cdef float32_t [:] _exp_table
 cdef Parameters _param
 cdef object _alpha
-cdef object _line_counter
 cdef float32_t [:] _work
 
 def train(Dictionary dic, Corpus corpus, **kwargs):
@@ -57,7 +56,6 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
     dic = dic
     n_line = len(corpus)
 
-    line_counter = Value(c_uint64, 0)
     alpha = RawValue(c_float, param.init_alpha)
 
     logger.info("Building Negative Sampling Table")
@@ -88,18 +86,20 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
         exp_table,
         param,
         alpha,
-        line_counter,
     )
-    with Pool(cpu_count(), initializer=init_work, initargs=init_args) as p:
-        processed_tokens = 0
+
+    poolsize = cpu_count()
+    #poolsize = 1
+    with Pool(poolsize, initializer=init_work, initargs=init_args) as p:
         with tqdm(total=n_line, mininterval=0.5) as bar:
-            for i, n_tokens in enumerate(p.imap_unordered(train_line, corpus, chunksize=30)):
+            for _ in p.imap_unordered(train_line, enumerate(corpus.indexes()), chunksize=100):
                 bar.update(1)
+                #tqdm.write("Alpha: {:.5}".format(alpha.value))
 
     return Embedding(dic, trg, ctx)
 
-def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, alpha, line_counter):
-    global _dic, _n_line, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _line_counter, _work, _dim
+def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, alpha):
+    global _dic, _n_line, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _dim, _work
 
     _dic = dic
     _n_line = n_line
@@ -109,46 +109,51 @@ def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, 
 
     _param = param
     _alpha = alpha
-    _line_counter = line_counter
 
     _trg = np.frombuffer(trg_shared, dtype=np.float32).reshape(len(dic), _param.dim)
     _ctx = np.frombuffer(ctx_shared, dtype=np.float32).reshape(len(dic), _param.dim)
     _work = np.zeros(_param.dim, dtype=np.float32)
 
-    #seed(np.random.randint(2 ** 31))
-
-def train_line(list line):
-    """
-        line: sequence of Words
-    """
-    cdef int center_pos, context_pos, start, end
-    cdef Word center
-    cdef Word context
-    cdef float p
-
-    cdef int n = len(line)
-    
-    for center_pos in range(n):
-        start = max(0, center_pos - _param.window)
-        end = min(n, center_pos + _param.window + 1)
-        for context_pos in range(start, end):
-            center = line[center_pos]
-            context = line[context_pos]
-            if center.index != context.index:
-                _train(center, context, _alpha.value)
-
-    return n
-
-    with _line_counter.get_lock():
-        _line_counter.value += 1
-        p = 1.0 - float(_line_counter.value) / _n_line
-        _alpha.value = max(_param.min_alpha, p * _param.init_alpha)
-    
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
 @cython.cdivision(True)
-cdef inline void _train(Word trg, Word ctx, float32_t alpha):
+def train_line(tuple args):
+    """
+        line: sequence of Words
+    """
+    cdef int32_t center_pos, context_pos, start, end
+    cdef int32_t center
+    cdef int32_t context
+    cdef float32_t p
+    cdef int line_n
+    cdef list line
+    cdef int n_tokens
+    cdef float32_t alpha_
+
+    line_n, line = args
+    
+    n_tokens = len(line)
+
+    alpha_ = _alpha.value
+
+
+    for center_pos in xrange(n_tokens):
+        start = max(0, center_pos - _param.window)
+        end = min(n_tokens, center_pos + _param.window + 1)
+        for context_pos in xrange(start, end):
+            center = line[center_pos]
+            context = line[context_pos]
+            if center_pos != context_pos:
+                _train(center, context, alpha_)
+
+    _alpha.value = max(_param.min_alpha, _param.init_alpha * (1.0-line_n/_n_line))
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+@cython.cdivision(True)
+cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     cdef float32_t label, f, g, f_dot
     cdef int32_t ctx_index, neg_index
     cdef int one = 1
@@ -160,16 +165,16 @@ cdef inline void _train(Word trg, Word ctx, float32_t alpha):
     for d in range(_param.negative + 1):
         if d == 0:
             # This is normal
-            ctx_index = ctx.index
+            ctx_index = ctx
             label = 1.0
         else:
             # Negative Sample
-            neg_index = np.random.randint(0, NEG_TABLE_SIZE)
-            #neg_index = randint_c() % NEG_TABLE_SIZE
+            #neg_index = np.random.randint(0, NEG_TABLE_SIZE)
+            neg_index = randint_c() % NEG_TABLE_SIZE
             ctx_index = _neg_table[neg_index]
             label = 0.0
 
-        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg.index, 0], &one, &_ctx[ctx_index, 0], &one))
+        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_index, 0], &one))
 
         if f_dot >= MAX_EXP or f_dot <= -MAX_EXP:
             # What if the f_dot is too high for wrong direction?
@@ -179,10 +184,6 @@ cdef inline void _train(Word trg, Word ctx, float32_t alpha):
         g = (label - f) * alpha
 
         blas.saxpy(&dim, &g, &_ctx[ctx_index, 0], &one, &_work[0], &one)
-        blas.saxpy(&dim, &g, &_trg[trg.index, 0], &one, &_ctx[ctx_index, 0], &one)
+        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx_index, 0], &one)
 
-    blas.saxpy(&dim, &onef, &_work[0], &one, &_trg[trg.index, 0], &one)
-        
-
-
-
+    blas.saxpy(&dim, &onef, &_work[0], &one, &_trg[trg, 0], &one)
