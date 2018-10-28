@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cython --cplus word2vec/*.pyx
+pipenv run cython --cplus word2vec/*.pyx

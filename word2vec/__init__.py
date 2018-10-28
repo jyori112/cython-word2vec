@@ -1,2 +1,2 @@
-from data import Dictionary, Corpus, Embedding
-from train import train
+from .data import Dictionary, Corpus, Embedding
+from .train import train

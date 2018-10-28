@@ -30,6 +30,7 @@ cdef class Parameters:
     cdef public int32_t window
     cdef public int32_t negative
     cdef public float32_t neg_power
+    cdef public int32_t workers
     cdef dict _params
 
     def __init__(self, params):
@@ -88,7 +89,7 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
         alpha,
     )
 
-    poolsize = cpu_count()
+    poolsize = param.workers
     #poolsize = 1
     with Pool(poolsize, initializer=init_work, initargs=init_args) as p:
         with tqdm(total=n_line, mininterval=0.5) as bar:

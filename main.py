@@ -33,6 +33,7 @@ def build_dic(corpus, output):
 @click.option('--init_alpha', type=float, default=0.025)
 @click.option('--min_alpha', type=float, default=0.0001)
 @click.option('--neg-power', type=float, default=3/4)
+@click.option('--workers', type=int, default=5)
 def train(corpus, dictionary, output, iteration, **kwargs):
     logger.info('Load dictionary')
     dic = Dictionary.load(dictionary)
