@@ -31,6 +31,7 @@ cdef class Parameters:
     cdef public int32_t negative
     cdef public float32_t neg_power
     cdef public int32_t workers
+    cdef public bint ctx_negative
     cdef dict _params
 
     def __init__(self, params):
@@ -174,7 +175,7 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
         g = (1.0 - f) * alpha
 
         blas.saxpy(&dim, &g, &_ctx[ctx, 0], &one, &_trg_grad[0], &one)
-        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one)
+        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx_grad[0], &one)
 
     for d in range(_param.negative):
         # Negative Sample
@@ -191,7 +192,7 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
             blas.saxpy(&dim, &trg_g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
             blas.saxpy(&dim, &trg_g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
 
-        if -MAX_EXP < ctx_f_dot and ctx_f_dot < MAX_EXP:
+        if -MAX_EXP < ctx_f_dot and ctx_f_dot < MAX_EXP and _param.ctx_negative:
             ctx_f = _exp_table[<int>((ctx_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
             ctx_g = - ctx_f * alpha
 

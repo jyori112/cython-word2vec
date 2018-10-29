@@ -30,6 +30,7 @@ def build_dic(corpus, output):
 @click.option('--dim', type=int, default=100)
 @click.option('--window', type=int, default=5)
 @click.option('--negative', type=int, default=10)
+@click.option('--ctx-negative/--no-ctx-negative', default=False)
 @click.option('--init_alpha', type=float, default=0.025)
 @click.option('--min_alpha', type=float, default=0.0001)
 @click.option('--neg-power', type=float, default=3/4)
