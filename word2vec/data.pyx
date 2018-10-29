@@ -80,7 +80,7 @@ cdef class Dictionary:
         return neg_table
 
     @staticmethod
-    def build(path):
+    def build(path, min_count=5):
         word_count = Counter()
         n_lines = 0
         with open(path) as f:
@@ -91,7 +91,7 @@ cdef class Dictionary:
                     word_count.update(tokens)
                     n_lines += 1
 
-        word_list = [(text, count) for text, count in word_count.items() if count >= 5]
+        word_list = [(text, count) for text, count in word_count.items() if count >= min_count]
         word_list = sorted(word_list, key=lambda x: x[1], reverse=True)
         word_list = [Word(idx, text, count) for idx, (text, count) in enumerate(word_list)]
 
