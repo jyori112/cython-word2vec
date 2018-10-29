@@ -157,7 +157,6 @@ def train_line(tuple args):
 @cython.cdivision(True)
 cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     cdef float32_t label, f, g, f_dot
-    cdef int32_t trg_index, ctx_index
     cdef int one = 1
     cdef float32_t onef = <float32_t>1.0
     cdef int dim = _param.dim
@@ -165,28 +164,29 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     memset(&_trg_grad[0], 0, _param.dim * cython.sizeof(float32_t))
     memset(&_ctx_grad[0], 0, _param.dim * cython.sizeof(float32_t))
 
-    for d in range(_param.negative + 1):
-        if d == 0:
-            # This is normal
-            trg_index = trg
-            ctx_index = ctx
-            label = 1.0
-        else:
-            # Negative Sample
-            trg_index = trg
-            ctx_index = _neg_table[randint_c() % NEG_TABLE_SIZE]
-            label = 0.0
+    # This is normal
+    label = 1.0
+    f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one))
 
-        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg_index, 0], &one, &_ctx[ctx_index, 0], &one))
-
-        if f_dot >= MAX_EXP or f_dot <= -MAX_EXP:
-            # What if the f_dot is too high for wrong direction?
-            continue
-
+    if -MAX_EXP < f_dot and f_dot < MAX_EXP:
         f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
         g = (label - f) * alpha
 
-        blas.saxpy(&dim, &g, &_ctx[ctx_index, 0], &one, &_trg_grad[0], &one)
-        blas.saxpy(&dim, &g, &_trg[trg_index, 0], &one, &_ctx[ctx_index, 0], &one)
+        blas.saxpy(&dim, &g, &_ctx[ctx, 0], &one, &_trg_grad[0], &one)
+        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one)
 
-    blas.saxpy(&dim, &onef, &_trg_grad[0], &one, &_trg[trg_index, 0], &one)
+    for d in range(_param.negative):
+        # Negative Sample
+        ctx_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
+        label = 0.0
+
+        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
+
+        if -MAX_EXP < f_dot and f_dot < MAX_EXP:
+            f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
+            g = (label - f) * alpha
+
+            blas.saxpy(&dim, &g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
+            blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
+
+    blas.saxpy(&dim, &onef, &_trg_grad[0], &one, &_trg[trg, 0], &one)
