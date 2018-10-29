@@ -157,6 +157,8 @@ def train_line(tuple args):
 @cython.cdivision(True)
 cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     cdef float32_t f, g, f_dot
+    cdef float32_t trg_f, trg_g, trg_f_dot
+    cdef float32_t ctx_f, ctx_g, ctx_f_dot
     cdef int one = 1
     cdef float32_t onef = <float32_t>1.0
     cdef int dim = _param.dim
@@ -176,15 +178,17 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
 
     for d in range(_param.negative):
         # Negative Sample
+        trg_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
         ctx_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
 
-        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
+        trg_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
+        ctx_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg_neg, 0], &one, &_ctx[ctx, 0], &one))
 
         if -MAX_EXP < f_dot and f_dot < MAX_EXP:
-            f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
-            g = - f * alpha
+            trg_f = _exp_table[<int>((trg_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
+            trg_g = - trg_f * alpha
 
-            blas.saxpy(&dim, &g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
-            blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
+            blas.saxpy(&dim, &trg_g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
+            blas.saxpy(&dim, &trg_g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
 
     blas.saxpy(&dim, &onef, &_trg_grad[0], &one, &_trg[trg, 0], &one)
