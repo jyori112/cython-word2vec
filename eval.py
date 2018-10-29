@@ -15,9 +15,16 @@ def cli():
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
 @click.argument('wordsim', type=click.Path(exists=True))
-def eval_wordsim(embedding, wordsim):
+@click.option('--type', type=click.Choice(['trg', 'ctx']), default='trg')
+def eval_wordsim(embedding, wordsim, type):
     emb = Embedding.load(embedding)
-    wordsim = evaluation.WordSim.load(emb.dic, wordsim, sep='\t')
+
+    if type == 'trg':
+        emb.trg()
+    elif type == 'ctx':
+        emb.ctx()
+
+    wordsim = evaluation.WordSim.load(emb._dic, wordsim, sep='\t')
     score = wordsim.evaluate(emb)
 
     logger.info('Spearman={:.3f}'.format(score))

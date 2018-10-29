@@ -141,16 +141,42 @@ cdef class Corpus:
 
 cdef class Embedding:
     def __init__(self, Dictionary dic, np.ndarray trg, np.ndarray ctx):
-        self.dic = dic
-        self.trg = trg
-        self.ctx = ctx
-        self.trg_nrm = self.trg / np.linalg.norm(self.trg, axis=1)[:, None]
+        self._dic = dic
+        self._trg = trg
+        self._ctx = ctx
+        self._trg_nrm = self._trg / np.linalg.norm(self._trg, axis=1)[:, None]
+        self._ctx_nrm = self._ctx / np.linalg.norm(self._ctx, axis=1)[:, None]
+        self._mode = 'trg'
+
+    def ctx(self):
+        self._mode = 'ctx'
+
+    def trg(self):
+        self._mode = 'trg'
+
+    @property
+    def matrix(self):
+        if self._mode == 'trg':
+            return self._trg
+        elif self._mode == 'ctx':
+            return self._ctx
+        else:
+            raise Exception('Unknown mode')
+
+    @property
+    def norm_matrix(self):
+        if self._mode == 'trg':
+            return self._trg_nrm
+        elif self._mode == 'ctx':
+            return self._ctx_nrm
+        else:
+            raise Exception('Unknown mode')
 
     cpdef np.ndarray get_vec(self, Word word):
-        return self.trg[word.index]
+        return self.matrix[word.index]
 
     cpdef list get_similar_by_vec(self, np.ndarray vec, int count):
-        score = np.dot(self.trg_nrm, vec) / np.linalg.norm(vec)
+        score = np.dot(self.norm_matrix, vec) / np.linalg.norm(vec)
         rank = np.argsort(-score)[:count]
         return [(self.dic.index2word(index), score[index]) for index in rank]
     
@@ -158,11 +184,11 @@ cdef class Embedding:
         return self.get_similar_by_vec(self.get_vec(word), count)
 
     def save(self, path):
-        joblib.dump(dict(dic=self.dic, trg=self.trg, ctx=self.ctx), path)
+        joblib.dump(dict(dic=self._dic, trg=self._trg, ctx=self._ctx), path)
 
     def save_text(self, path):
         with open(path, 'w') as f:
-            f.write('{} {}\n'.format(self.trg.shape[0], self.trg.shape[1]))
+            f.write('{} {}\n'.format(self.matrix.shape[0], self.matrix.shape[1]))
             for word in self.dic:
                 vec_str = ' '.join('{:.6f}'.format(v) for v in self.get_vec(word))
                 f.write('{} {}\n'.format(word.text, vec_str))

@@ -23,10 +23,12 @@ cdef class Corpus:
     cdef public int n_epoch, epoch
 
 cdef class Embedding:
-    cdef public np.ndarray trg
-    cdef public np.ndarray ctx
-    cdef public np.ndarray trg_nrm
-    cdef public Dictionary dic
+    cdef public np.ndarray _trg
+    cdef public np.ndarray _ctx
+    cdef public np.ndarray _trg_nrm
+    cdef public np.ndarray _ctx_nrm
+    cdef public Dictionary _dic
+    cdef str _mode
 
     cpdef np.ndarray get_vec(self, Word word)
     cpdef list get_similar_by_vec(self, np.ndarray vec, int count)

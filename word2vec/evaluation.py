@@ -11,8 +11,8 @@ class WordSim:
         word1_index = np.array([w.index for w in self.word1], dtype=np.int32)
         word2_index = np.array([w.index for w in self.word2], dtype=np.int32)
 
-        word1_emb = emb.trg_nrm[word1_index]
-        word2_emb = emb.trg_nrm[word2_index]
+        word1_emb = emb.norm_matrix[word1_index]
+        word2_emb = emb.norm_matrix[word2_index]
 
         model_score = np.einsum('ij,ij->i', word1_emb, word2_emb)
 
