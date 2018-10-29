@@ -189,7 +189,7 @@ cdef class Embedding:
     def save_text(self, path):
         with open(path, 'w') as f:
             f.write('{} {}\n'.format(self.matrix.shape[0], self.matrix.shape[1]))
-            for word in self.dic:
+            for word in self._dic:
                 vec_str = ' '.join('{:.6f}'.format(v) for v in self.get_vec(word))
                 f.write('{} {}\n'.format(word.text, vec_str))
     
