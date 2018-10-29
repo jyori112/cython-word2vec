@@ -1,3 +1,5 @@
+import os
+from tqdm import tqdm
 from collections import Counter, defaultdict
 import joblib
 from ctypes import c_float, c_int32, c_uint32, c_uint64
@@ -82,10 +84,12 @@ cdef class Dictionary:
         word_count = Counter()
         n_lines = 0
         with open(path) as f:
-            for line in f:
-                tokens = line.split()
-                word_count.update(tokens)
-                n_lines += 1
+            with tqdm(total=os.fstat(f.fileno()).st_size) as bar:
+                for line in f:
+                    bar.update(len(line))
+                    tokens = line.split()
+                    word_count.update(tokens)
+                    n_lines += 1
 
         word_list = [(text, count) for text, count in word_count.items() if count >= 5]
         word_list = sorted(word_list, key=lambda x: x[1], reverse=True)
