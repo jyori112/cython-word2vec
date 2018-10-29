@@ -184,11 +184,19 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
         trg_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
         ctx_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg_neg, 0], &one, &_ctx[ctx, 0], &one))
 
-        if -MAX_EXP < f_dot and f_dot < MAX_EXP:
+        if -MAX_EXP < trg_f_dot and trg_f_dot < MAX_EXP:
             trg_f = _exp_table[<int>((trg_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
             trg_g = - trg_f * alpha
 
             blas.saxpy(&dim, &trg_g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
             blas.saxpy(&dim, &trg_g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
 
+        if -MAX_EXP < ctx_f_dot and ctx_f_dot < MAX_EXP:
+            ctx_f = _exp_table[<int>((ctx_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
+            ctx_g = - ctx_f * alpha
+
+            blas.saxpy(&dim, &ctx_g, &_trg[trg_neg, 0], &one, &_ctx_grad[0], &one)
+            blas.saxpy(&dim, &ctx_g, &_ctx[ctx, 0], &one, &_trg[trg_neg, 0], &one)
+
     blas.saxpy(&dim, &onef, &_trg_grad[0], &one, &_trg[trg, 0], &one)
+    blas.saxpy(&dim, &onef, &_ctx_grad[0], &one, &_ctx[ctx, 0], &one)
