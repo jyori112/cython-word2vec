@@ -156,7 +156,7 @@ def train_line(tuple args):
 @cython.initializedcheck(False)
 @cython.cdivision(True)
 cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
-    cdef float32_t label, f, g, f_dot
+    cdef float32_t f, g, f_dot
     cdef int one = 1
     cdef float32_t onef = <float32_t>1.0
     cdef int dim = _param.dim
@@ -165,12 +165,11 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     memset(&_ctx_grad[0], 0, _param.dim * cython.sizeof(float32_t))
 
     # This is normal
-    label = 1.0
     f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one))
 
     if -MAX_EXP < f_dot and f_dot < MAX_EXP:
         f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
-        g = (label - f) * alpha
+        g = (1.0 - f) * alpha
 
         blas.saxpy(&dim, &g, &_ctx[ctx, 0], &one, &_trg_grad[0], &one)
         blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one)
@@ -178,13 +177,12 @@ cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
     for d in range(_param.negative):
         # Negative Sample
         ctx_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
-        label = 0.0
 
         f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
 
         if -MAX_EXP < f_dot and f_dot < MAX_EXP:
             f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
-            g = (label - f) * alpha
+            g = - f * alpha
 
             blas.saxpy(&dim, &g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
             blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
