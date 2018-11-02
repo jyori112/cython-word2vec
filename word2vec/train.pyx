@@ -142,8 +142,9 @@ def train_line(tuple args):
 
 
     for center_pos in xrange(n_tokens):
-        start = max(0, center_pos - _param.window)
-        end = min(n_tokens, center_pos + _param.window + 1)
+        window = randint_c() % _param.window
+        start = max(0, center_pos - window)
+        end = min(n_tokens, center_pos + window + 1)
         for context_pos in xrange(start, end):
             center = line[center_pos]
             context = line[context_pos]
