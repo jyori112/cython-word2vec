@@ -15,19 +15,26 @@ def cli():
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
 @click.argument('wordsim', type=click.Path(exists=True))
-@click.option('--type', type=click.Choice(['trg', 'ctx']), default='trg')
-def eval_wordsim(embedding, wordsim, type):
+@click.option('--emb-type', type=click.Choice(['trg', 'ctx']))
+def eval_wordsim(embedding, wordsim, emb_type):
     emb = Embedding.load(embedding)
 
-    if type == 'trg':
-        emb.trg()
-    elif type == 'ctx':
-        emb.ctx()
-
     wordsim = evaluation.WordSim.load(emb._dic, wordsim, sep='\t')
-    score = wordsim.evaluate(emb)
 
-    logger.info('Spearman={:.3f}'.format(score))
+    if emb_type is None:
+        emb_types = ['trg', 'ctx']
+    else:
+        emb_types = [emb_type]
+
+    for emb_type in emb_types:
+        if emb_type == 'trg':
+            emb.trg()
+        elif emb_type == 'ctx':
+            emb.ctx()
+
+        score = wordsim.evaluate(emb)
+
+        logger.info('Type={}; Spearman={:.3f}'.format(emb_type, score))
 
 if __name__ ==  '__main__':
     cli()
