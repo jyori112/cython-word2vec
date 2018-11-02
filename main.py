@@ -15,9 +15,10 @@ def cli():
 @cli.command()
 @click.argument('corpus', type=click.Path(exists=True))
 @click.argument('output', type=click.Path())
-def build_dic(corpus, output):
+@click.option('--min-count', type=int, default=5)
+def build_dic(corpus, output, min_count):
     logger.info('Build dictionary')
-    dic = Dictionary.build(corpus)
+    dic = Dictionary.build(corpus, min_count=min_count)
 
     logger.info('Saving dictionary')
     dic.save(output)
