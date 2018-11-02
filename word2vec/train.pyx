@@ -31,6 +31,7 @@ cdef class Parameters:
     cdef public int32_t negative
     cdef public float32_t neg_power
     cdef public int32_t workers
+    cdef public bint ctx_negative
     cdef dict _params
 
     def __init__(self, params):
@@ -49,7 +50,7 @@ cdef int32_t [:] _neg_table
 cdef float32_t [:] _exp_table
 cdef Parameters _param
 cdef object _alpha
-cdef float32_t [:] _work
+cdef float32_t [:] _trg_grad, _ctx_grad
 
 def train(Dictionary dic, Corpus corpus, **kwargs):
     param = Parameters(kwargs)
@@ -100,7 +101,7 @@ def train(Dictionary dic, Corpus corpus, **kwargs):
     return Embedding(dic, trg, ctx)
 
 def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, alpha):
-    global _dic, _n_line, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _dim, _work
+    global _dic, _n_line, _trg, _ctx, _neg_table, _exp_table, _param, _alpha, _dim, _trg_grad, _ctx_grad
 
     _dic = dic
     _n_line = n_line
@@ -113,7 +114,8 @@ def init_work(dic, n_line, trg_shared, ctx_shared, neg_table, exp_table, param, 
 
     _trg = np.frombuffer(trg_shared, dtype=np.float32).reshape(len(dic), _param.dim)
     _ctx = np.frombuffer(ctx_shared, dtype=np.float32).reshape(len(dic), _param.dim)
-    _work = np.zeros(_param.dim, dtype=np.float32)
+    _trg_grad = np.zeros(_param.dim, dtype=np.float32)
+    _ctx_grad = np.zeros(_param.dim, dtype=np.float32)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -155,36 +157,47 @@ def train_line(tuple args):
 @cython.initializedcheck(False)
 @cython.cdivision(True)
 cdef inline void _train(int32_t trg, int32_t ctx, float32_t alpha):
-    cdef float32_t label, f, g, f_dot
-    cdef int32_t ctx_index, neg_index
+    cdef float32_t f, g, f_dot
+    cdef float32_t trg_f, trg_g, trg_f_dot
+    cdef float32_t ctx_f, ctx_g, ctx_f_dot
     cdef int one = 1
     cdef float32_t onef = <float32_t>1.0
     cdef int dim = _param.dim
 
-    memset(&_work[0], 0, _param.dim * cython.sizeof(float32_t))
+    memset(&_trg_grad[0], 0, _param.dim * cython.sizeof(float32_t))
+    memset(&_ctx_grad[0], 0, _param.dim * cython.sizeof(float32_t))
 
-    for d in range(_param.negative + 1):
-        if d == 0:
-            # This is normal
-            ctx_index = ctx
-            label = 1.0
-        else:
-            # Negative Sample
-            #neg_index = np.random.randint(0, NEG_TABLE_SIZE)
-            neg_index = randint_c() % NEG_TABLE_SIZE
-            ctx_index = _neg_table[neg_index]
-            label = 0.0
+    # This is normal
+    f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx, 0], &one))
 
-        f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_index, 0], &one))
-
-        if f_dot >= MAX_EXP or f_dot <= -MAX_EXP:
-            # What if the f_dot is too high for wrong direction?
-            continue
-
+    if -MAX_EXP < f_dot and f_dot < MAX_EXP:
         f = _exp_table[<int>((f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
-        g = (label - f) * alpha
+        g = (1.0 - f) * alpha
 
-        blas.saxpy(&dim, &g, &_ctx[ctx_index, 0], &one, &_work[0], &one)
-        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx[ctx_index, 0], &one)
+        blas.saxpy(&dim, &g, &_ctx[ctx, 0], &one, &_trg_grad[0], &one)
+        blas.saxpy(&dim, &g, &_trg[trg, 0], &one, &_ctx_grad[0], &one)
 
-    blas.saxpy(&dim, &onef, &_work[0], &one, &_trg[trg, 0], &one)
+    for d in range(_param.negative):
+        # Negative Sample
+        trg_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
+        ctx_neg = _neg_table[randint_c() % NEG_TABLE_SIZE]
+
+        trg_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one))
+        ctx_f_dot = <float32_t>(blas.sdot(&dim, &_trg[trg_neg, 0], &one, &_ctx[ctx, 0], &one))
+
+        if -MAX_EXP < trg_f_dot and trg_f_dot < MAX_EXP:
+            trg_f = _exp_table[<int>((trg_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
+            trg_g = - trg_f * alpha
+
+            blas.saxpy(&dim, &trg_g, &_ctx[ctx_neg, 0], &one, &_trg_grad[0], &one)
+            blas.saxpy(&dim, &trg_g, &_trg[trg, 0], &one, &_ctx[ctx_neg, 0], &one)
+
+        if -MAX_EXP < ctx_f_dot and ctx_f_dot < MAX_EXP and _param.ctx_negative:
+            ctx_f = _exp_table[<int>((ctx_f_dot + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]
+            ctx_g = - ctx_f * alpha
+
+            blas.saxpy(&dim, &ctx_g, &_trg[trg_neg, 0], &one, &_ctx_grad[0], &one)
+            blas.saxpy(&dim, &ctx_g, &_ctx[ctx, 0], &one, &_trg[trg_neg, 0], &one)
+
+    blas.saxpy(&dim, &onef, &_trg_grad[0], &one, &_trg[trg, 0], &one)
+    blas.saxpy(&dim, &onef, &_ctx_grad[0], &one, &_ctx[ctx, 0], &one)
