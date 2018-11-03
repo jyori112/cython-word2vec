@@ -23,6 +23,7 @@ cdef class Corpus:
     cdef public int n_epoch, epoch
 
 cdef class Embedding:
+    cdef public int _dim
     cdef public np.ndarray _trg
     cdef public np.ndarray _ctx
     cdef public np.ndarray _trg_nrm

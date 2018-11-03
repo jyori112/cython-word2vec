@@ -9,6 +9,7 @@ import numpy as np
 cimport numpy as np
 import scipy.stats
 import scipy.spatial.distance
+from gensim import models
 
 cdef class Word:
     def __init__(self, int index, str text, int count):
@@ -145,12 +146,19 @@ cdef class Corpus:
 
 cdef class Embedding:
     def __init__(self, Dictionary dic, np.ndarray trg, np.ndarray ctx):
+        self._dim = trg.shape[1]
         self._dic = dic
         self._trg = trg
         self._ctx = ctx
         self._trg_nrm = self._trg / np.linalg.norm(self._trg, axis=1)[:, None]
         self._ctx_nrm = self._ctx / np.linalg.norm(self._ctx, axis=1)[:, None]
         self._mode = 'trg'
+
+    def to_gensim(self):
+        gensim_w2v = models.keyedvectors.WordEmbeddingsKeyedVectors(self._dim)
+        words = [word.text for word in self._dic]
+        gensim_w2v.add(words, self.matrix)
+        return gensim_w2v
 
     def ctx(self):
         self._mode = 'ctx'
