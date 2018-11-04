@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 from word2vec import Dictionary, Embedding, Corpus, train as train_emb
-from gensim import models
+from gensim.models import word2vec
 import joblib
 import logging, sys
 import click
@@ -50,6 +50,28 @@ def train(corpus, dictionary, output, iteration, **kwargs):
 
     emb.save(output)
     emb.save_text(output + '.w2v')
+
+@cli.command()
+@click.argument('corpus', type=click.Path(exists=True))
+@click.argument('output', type=click.Path())
+@click.option('--min-count', type=int, default=5)
+@click.option('--iteration', type=int, default=5)
+@click.option('--dim', type=int, default=100)
+@click.option('--window', type=int, default=5)
+@click.option('--negative', type=int, default=10)
+@click.option('--init_alpha', type=float, default=0.025)
+@click.option('--min_alpha', type=float, default=0.0001)
+@click.option('--neg-power', type=float, default=3/4)
+@click.option('--workers', type=int, default=5)
+def train_gensim(corpus, output, min_count, iteration, dim, window, negative, init_alpha, min_alpha, neg_power, workers):
+    model = word2vec.Word2Vec(corpus_file=corpus, sg=1, size=dim, 
+            alpha=init_alpha, min_alpha=min_alpha, 
+            window=window, min_count=min_count, 
+            negative=negative, ns_exponent=neg_power, iter=iteration,
+            workers=workers)
+    
+    model.save(output)
+
 
 if __name__ == '__main__':
     cli()
