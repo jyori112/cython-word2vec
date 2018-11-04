@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
-from word2vec import Dictionary, Corpus, train as train_emb
+from word2vec import Dictionary, Embedding, Corpus, train as train_emb
+from gensim import models
 import joblib
 import logging, sys
 import click
@@ -10,13 +11,13 @@ logger = logging.getLogger(__name__)
 @click.group()
 def cli():
     LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 @cli.command()
 @click.argument('corpus', type=click.Path(exists=True))
 @click.argument('output', type=click.Path())
 @click.option('--min-count', type=int, default=5)
 def build_dic(corpus, output, min_count):
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     logger.info('Build dictionary')
     dic = Dictionary.build(corpus, min_count=min_count)
 
@@ -37,6 +38,7 @@ def build_dic(corpus, output, min_count):
 @click.option('--neg-power', type=float, default=3/4)
 @click.option('--workers', type=int, default=5)
 def train(corpus, dictionary, output, iteration, **kwargs):
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     logger.info('Load dictionary')
     dic = Dictionary.load(dictionary)
 
