@@ -115,6 +115,27 @@ def eval_dir(embedding, eval_dir, emb_type):
                 result['emb-type'] = emb_type
                 print('\t' + format_result(result))
 
+@cli.command()
+@click.argument('embedding', type=click.Path(exists=True))
+@click.argument('eval-dir', type=click.Path(exists=True))
+def eval_dir_gensim(embedding, eval_dir):
+    eval_dir = Path(eval_dir)
+    anal_dir = eval_dir / 'analogy'
+    sim_dir = eval_dir / 'similarity'
+
+    k2v = models.word2vec.Word2Vec.load(embedding).wv
+
+    if anal_dir.is_dir():
+        for filename in os.listdir(anal_dir):
+            print('analogy/{}'.format(filename))
+            result = evaluate_anology(k2v, anal_dir / filename)
+            print('\t' + format_result(result))
+
+    if sim_dir.is_dir():
+        for filename in os.listdir(sim_dir):
+            print('similarity/{}'.format(filename))
+            result = evaluate_similarity(k2v, sim_dir / filename)
+            print('\t' + format_result(result))
 
 
 if __name__ ==  '__main__':
