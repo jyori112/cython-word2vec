@@ -40,17 +40,13 @@ def evaluate_anology(key2vec, analogy_path):
     acc, sections = key2vec.evaluate_word_analogies(analogy_path)
 
     return dict(acc=acc)
-    
 
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
-@click.argument('wordsim', type=click.Path(exists=True))
+@click.argument('eval-data', type=click.Path(exists=True))
 @click.option('--emb-type', type=click.Choice(['all', 'trg', 'ctx']), default='all')
-def eval_wordsim(embedding, wordsim, emb_type):
-    # Gensim evaluate_word_pairs() produce FutureWarning, Ignore it
-    import warnings
-    warnings.simplefilter(action='ignore', category=FutureWarning)
-
+@click.option('--similarity/--analogy', default=True)
+def eval(embedding, eval_data, emb_type, similarity):
     emb = Embedding.load(embedding)
 
     if emb_type == 'all':
@@ -65,17 +61,25 @@ def eval_wordsim(embedding, wordsim, emb_type):
             emb.ctx()
 
         k2v = emb.to_gensim()
-        result = evalute_wordsim(k2v, wordsim)
+        if similarity:
+            result = evalute_wordsim(k2v, eval_data)
+        else:
+            result = evaluate_anology(k2v, eval_data)
         result['emb-type'] = emb_type
         print(format_result(result))
 
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
-@click.argument('wordsim', type=click.Path(exists=True))
-def eval_wordsim_gensim(embedding, wordsim):
-    k2v = models.keyedvectors.WordEmbeddingsKeyedVectors.load(embedding)
+@click.argument('eval-data', type=click.Path(exists=True))
+@click.option('--similarity/--analogy', default=True)
+def eval_gensim(embedding, eval_data, similarity):
+    k2v = models.word2vec.Word2Vec.load(embedding).wv
 
-    result = evalute_wordsim(k2v, wordsim)
+    if similarity:
+        result = evalute_wordsim(k2v, eval_data)
+    else:
+        result = evaluate_anology(k2v, eval_data)
+
     print(format_result(result))
 
 if __name__ ==  '__main__':
