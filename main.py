@@ -7,10 +7,11 @@ import logging, sys
 import click
 
 logger = logging.getLogger(__name__)
+LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
 
 @click.group()
 def cli():
-    LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
+    pass
 
 @cli.command()
 @click.argument('corpus', type=click.Path(exists=True))
