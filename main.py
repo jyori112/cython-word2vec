@@ -32,14 +32,20 @@ def build_dic(corpus, output, min_count):
 @click.option('--dim', type=int, default=100)
 @click.option('--window', type=int, default=5)
 @click.option('--negative', type=int, default=10)
-@click.option('--ctx-negative/--no-ctx-negative', default=False)
+@click.option('--symmetric/--no-symmetric', default=False)
 @click.option('--init_alpha', type=float, default=0.025)
 @click.option('--min_alpha', type=float, default=0.0001)
 @click.option('--neg-power', type=float, default=3/4)
 @click.option('--workers', type=int, default=5)
-def train(corpus, dictionary, output, iteration, **kwargs):
+def train(corpus, dictionary, output, iteration, symmetric, **kwargs):
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     logger.info('Load dictionary')
+
+    if symmetric:
+        kwargs['ctx_negative'] = True
+    else:
+        kwargs['ctx_negative'] = False
+
     dic = Dictionary.load(dictionary)
 
     corpus = Corpus(dic, corpus, iteration)
