@@ -154,10 +154,18 @@ cdef class Embedding:
         self._ctx_nrm = self._ctx / np.linalg.norm(self._ctx, axis=1)[:, None]
         self._mode = 'trg'
 
-    def to_gensim(self):
+    def to_gensim(self, emb_type=None):
+        if emb_type is not None:
+            _mode = self._mode
+            self._mode = emb_type
+
         gensim_w2v = models.keyedvectors.WordEmbeddingsKeyedVectors(self._dim)
         words = [word.text for word in self._dic]
         gensim_w2v.add(words, self.matrix)
+
+        if emb_type is not None:
+            self._mode = _mode
+
         return gensim_w2v
 
     def ctx(self):
