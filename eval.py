@@ -10,7 +10,16 @@ logger = logging.getLogger(__name__)
 def cli():
     LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
 
-def evalute_wordsim(key2vec, wordsim_path, out_format='log', emb_type=None):
+def format_result(result):
+    def f(value):
+        if isinstance(value, float):
+            return '{:.3f}'.format(value)
+        else:
+            return value
+
+    return '; '.join('{}={}'.format(key, f(value)) for key, value in result.items())
+
+def evalute_wordsim(key2vec, wordsim_path):
     # Gensim evaluate_word_pairs() produce FutureWarning, Ignore it
     import warnings
     warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -20,43 +29,33 @@ def evalute_wordsim(key2vec, wordsim_path, out_format='log', emb_type=None):
     spearman = spearman[0]
     covarage = (100-oov)/100
 
-    if out_format == 'log':
-        if emb_type is not None:
-            print('emb-type={}; pearson={:.3f}; spearman={:.3f}; coverage={:.3f}'.format(
-                emb_type, pearson, spearman, covarage))
-        else:
-            print('pearson={:.3f}; spearman={:.3f}; coverage={:.3f}'.format(
-                pearson, spearman, covarage))
-    elif out_format in ('csv', 'tsv'):
-        sep = ',' if out_format == 'csv' else '\t'
-        if emb_type is not None:
-            print(emb_type, pearson, spearman, covarage, sep=sep)
-        else:
-            print(pearson, spearman, covarage, sep=sep)
+    return dict(pearson=pearson, spearman=spearman, covarage=covarage)
 
+def evaluate_anology(key2vec, analogy_path):
+    # Gensim evaluate_word_pairs() produce FutureWarning, Ignore it
+    import warnings
+    warnings.simplefilter(action='ignore', category=FutureWarning)
+
+    acc, sections = key2vec.evaluate_word_analogies(analogy_path)
+
+    return dict(acc=acc)
+    
 
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
 @click.argument('wordsim', type=click.Path(exists=True))
-@click.option('--emb-type', type=click.Choice(['trg', 'ctx']))
-@click.option('--out-format', type=click.Choice(['csv', 'tsv', 'log']), default='log')
-@click.option('--header/--no-header', default=True)
-def eval_wordsim(embedding, wordsim, emb_type, out_format, header):
+@click.option('--emb-type', type=click.Choice(['all', 'trg', 'ctx']), default='all')
+def eval_wordsim(embedding, wordsim, emb_type):
     # Gensim evaluate_word_pairs() produce FutureWarning, Ignore it
     import warnings
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
     emb = Embedding.load(embedding)
 
-    if emb_type is None:
+    if emb_type == 'all':
         emb_types = ['trg', 'ctx']
     else:
         emb_types = [emb_type]
-
-
-    if header and out_format in ('csv', 'tsv'):
-        sep = ',' if out_format == 'csv' else '\t'
-        print('emb-type', 'pearson', 'spearman', 'coverage', sep=sep)
 
     for emb_type in emb_types:
         if emb_type == 'trg':
@@ -65,7 +64,9 @@ def eval_wordsim(embedding, wordsim, emb_type, out_format, header):
             emb.ctx()
 
         k2v = emb.to_gensim()
-        evalute_wordsim(k2v, wordsim, out_format, emb_type=emb_type)
+        result = evalute_wordsim(k2v, wordsim)
+        result['emb-type'] = emb_type
+        print(format_result(result))
 
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
@@ -79,7 +80,7 @@ def eval_wordsim_gensim(embeddings, wordsim, out_format, header):
         sep = ',' if out_format == 'csv' else '\t'
         print('pearson', 'spearman', 'coverage', sep=sep)
 
-    evalute_gensim_with_wordsim(k2v, wordsim, out_format)
+    evaluate_wordsim(k2v, wordsim, out_format)
 
 if __name__ ==  '__main__':
     cli()
