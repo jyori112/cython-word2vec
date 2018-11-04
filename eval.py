@@ -3,6 +3,7 @@
 import click
 from word2vec import Embedding, evaluation
 import logging
+from gensim import models
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +72,11 @@ def eval_wordsim(embedding, wordsim, emb_type):
 @cli.command()
 @click.argument('embedding', type=click.Path(exists=True))
 @click.argument('wordsim', type=click.Path(exists=True))
-@click.option('--out-format', type=click.Choice(['csv', 'tsv', 'log']), default='log')
-@click.option('--header/--no-header', default=True)
-def eval_wordsim_gensim(embeddings, wordsim, out_format, header):
-    k2v = models.keyedvectors.WordEmbeddingsKeyedVectors.load(embeddings)
+def eval_wordsim_gensim(embedding, wordsim):
+    k2v = models.keyedvectors.WordEmbeddingsKeyedVectors.load(embedding)
 
-    if header and out_format in ('csv', 'tsv'):
-        sep = ',' if out_format == 'csv' else '\t'
-        print('pearson', 'spearman', 'coverage', sep=sep)
-
-    evaluate_wordsim(k2v, wordsim, out_format)
+    result = evalute_wordsim(k2v, wordsim)
+    print(format_result(result))
 
 if __name__ ==  '__main__':
     cli()
